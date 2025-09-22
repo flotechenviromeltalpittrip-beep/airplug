@@ -1,0 +1,922 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Set up Air Plug — WO con múltiples plugs</title>
+
+  <!-- Leaflet CSS -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+
+  <style>
+    :root{
+      --blue:#0b66d1;
+      --blue-600:#0a57b8;
+      --muted:#f4f7fb;
+      --card:#ffffff;
+      --radius:12px;
+      --shadow:0 6px 18px rgba(11,102,209,0.08),0 2px 6px rgba(2,6,23,0.06);
+      --glass: rgba(255,255,255,0.8);
+      --success:#2ecc71;
+      --danger:#e74c3c;
+      font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+    }
+    html,body,#app{height:100%;margin:0;padding:0;}
+    body{background:linear-gradient(180deg,#f7fbff 0%, #ffffff 100%);-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;color:#0b1724;}
+    #app{display:flex;flex-direction:column;height:100vh;}
+    header.app-header{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;background:var(--card);box-shadow:var(--shadow);border-bottom:1px solid rgba(11,102,209,0.04);}
+    .brand{display:flex;align-items:center;gap:12px}
+    .logo{width:44px;height:44px;border-radius:10px;background:linear-gradient(135deg,var(--blue),var(--blue-600));display:flex;align-items:center;justify-content:center;color:white;font-weight:700;font-size:18px;box-shadow:0 4px 12px rgba(11,102,209,0.16)}
+    .title{font-size:16px;font-weight:600}
+    .subtitle{font-size:12px;color:#365a8b}
+    .counters{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+    .pill{background:var(--muted);padding:8px 12px;border-radius:999px;font-weight:600;font-size:13px;color:var(--blue-600);box-shadow:0 2px 6px rgba(2,6,23,0.03)}
+
+    main{flex:1;position:relative;overflow:hidden}
+    #map{height:100%;width:100%;position:relative;}
+    .panel{position:absolute;bottom:0;left:0;right:0;z-index:1000;background:var(--card);max-height:46vh;overflow:auto;box-shadow:0 -6px 20px rgba(2,6,23,0.12);padding:12px;border-radius:14px 14px 0 0}
+    .panel-inner{max-height:36vh;overflow:auto}
+    .filters{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+    input[type=text], input[type=number], select, textarea, input[type=date]{width:100%;padding:10px 12px;border-radius:10px;border:1px solid rgba(11,102,209,0.08);font-size:14px}
+    .cards{display:flex;flex-direction:column;gap:8px}
+    .card{display:flex;flex-direction:column;padding:12px;border-radius:12px;background:var(--glass);box-shadow:0 4px 12px rgba(11,102,209,0.04);border:1px solid rgba(11,102,209,0.04)}
+    .card-row{display:flex;justify-content:space-between;align-items:center;gap:8px}
+    .card.removed{border-color:rgba(231,76,60,0.14);background:rgba(231,76,60,0.03)}
+    .card .meta{display:flex;flex-direction:column}
+    .muted{font-size:12px;color:#4b6b8f}
+    .state-pill{padding:6px 10px;border-radius:999px;font-weight:700;font-size:13px}
+    .state-installed{background:rgba(46,204,113,0.12);color:var(--success)}
+    .state-removed{background:rgba(231,76,60,0.12);color:var(--danger)}
+    .card-actions{display:flex;gap:8px;align-items:center}
+    .small-btn{padding:8px 10px;border-radius:10px;border:none;background:var(--blue);color:white;font-weight:700;cursor:pointer}
+    .small-btn.ghost{background:transparent;border:1px solid rgba(11,102,209,0.08);color:var(--blue-600)}
+    .small-btn[disabled]{opacity:0.6;cursor:not-allowed}
+    .small-btn.toggle-active{background:var(--blue-600);color:white;border:1px solid rgba(11,102,209,0.08)}
+
+    .leaflet-control.custom-controls { display:flex; flex-direction:column; gap:8px; }
+    .custom-controls .cc-inner { display:flex; flex-direction:column; align-items:stretch; gap:8px; padding:6px; }
+    .cc-icon-btn{ width:44px;height:44px;border-radius:50%;border:none;background:var(--card);box-shadow:var(--shadow);cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--blue-600) }
+    .cc-search-box{ display:none; padding:6px; border-radius:10px; background:var(--card); box-shadow:var(--shadow); display:flex; gap:6px; align-items:center; }
+    .cc-search-box input{ width:220px; padding:6px 8px; border:1px solid #ccc; border-radius:8px; font-size:14px }
+    .cc-big-btn{ background:var(--card); padding:10px 12px; border-radius:10px; box-shadow:var(--shadow); border:none; display:flex; align-items:center; justify-content:center; gap:8px; cursor:pointer; font-weight:700; color:var(--blue-600) }
+    .cc-big-btn.primary{ background:linear-gradient(180deg,var(--blue),var(--blue-600)); color:white }
+
+    @media(max-width:600px){
+      .cc-search-box input{ width:140px; }
+    }
+
+    /* Modal */
+    .modal-backdrop{
+      position:fixed;inset:0;background:rgba(3,6,23,0.4);display:none;align-items:center;justify-content:center;z-index:2000;transition:background .18s ease;
+    }
+    .modal{
+      width:92%;max-width:640px;background:var(--card);border-radius:12px;padding:14px;box-shadow:0 6px 30px rgba(2,6,23,0.25);margin:auto;
+    }
+    .modal-grid{display:grid;grid-template-columns:1fr;gap:12px}
+    .modal-section{padding:8px;border-radius:10px;background:linear-gradient(180deg, rgba(243,247,255,0.8), rgba(255,255,255,0.6));border:1px solid rgba(11,102,209,0.04)}
+    .modal-section h3{margin:0 0 6px 0;font-size:14px}
+    .modal-pins-list{display:flex;flex-direction:column;gap:6px;margin-top:6px}
+    .modal-pin-item{display:flex;justify-content:space-between;align-items:center;padding:8px;border-radius:8px;background:var(--muted);border:1px solid rgba(11,102,209,0.04)}
+    .pin-mini-meta{font-size:13px;color:#234a6a}
+
+    /* Floating capture control on map when capture active */
+    #map-capture-control {
+      position:fixed;
+      top:84px;
+      right:12px;
+      z-index:4000;
+      background:var(--card);
+      border-radius:10px;
+      padding:8px;
+      box-shadow:var(--shadow);
+      display:none;
+      align-items:center;
+      gap:8px;
+      font-size:14px;
+    }
+    #map-capture-control button{ background:var(--danger); color:white; border:none; padding:8px 10px; border-radius:8px; cursor:pointer; font-weight:700; }
+
+    @media(max-width:480px){
+      .modal{width:96%;padding:10px;}
+      .small-btn{font-size:14px;padding:7px 9px;}
+      #map-capture-control{ top:70px; right:8px; }
+    }
+
+  </style>
+</head>
+<body>
+  <div id="app">
+    <header class="app-header">
+      <div class="brand">
+        <div class="logo">AP</div>
+        <div>
+          <div class="title">Set up Air Plug</div>
+          <div class="subtitle">Flotech Enviromental</div>
+        </div>
+      </div>
+      <div class="counters">
+        <div class="pill" id="count-installed">Instalados: 0</div>
+        <div class="pill" id="count-removed">Retirados</div>
+        <div class="pill" id="count-total">Total: 0</div>
+        <select id="lang-switch" aria-label="Seleccionar idioma">
+          <option value="es">ES</option>
+          <option value="en">EN</option>
+        </select>
+      </div>
+    </header>
+
+    <main>
+      <div id="map" aria-label="Mapa interactivo"></div>
+
+      <section class="panel">
+        <div class="panel-inner" id="panel-inner">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <strong id="panel-title">Air Plugs</strong>
+            <div style="display:flex;gap:8px">
+              <button class="small-btn ghost" id="btn-center">Centrar mapa</button>
+              <button class="small-btn" id="btn-clear">Limpiar demo</button>
+            </div>
+          </div>
+
+          <div class="filters">
+            <input id="searchWO" class="search" type="text" placeholder="Buscar por WO..." />
+            <select id="filterState">
+              <option value="all">Todos</option>
+              <option value="installed">Instalado</option>
+              <option value="removed">Retirado</option>
+            </select>
+          </div>
+
+          <div class="cards" id="cards"></div>
+        </div>
+      </section>
+    </main>
+
+    <!-- Modal -->
+    <div class="modal-backdrop" id="modal-backdrop" aria-hidden="true">
+      <div class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title">
+        <form id="form" autocomplete="off">
+          <div class="modal-grid">
+            <div style="display:flex;justify-content:space-between;align-items:center">
+              <div>
+                <div id="modal-title" style="font-weight:800">Nuevo WO / Agregar plugs</div>
+                <div class="muted" style="font-size:13px">Agrega varios plugs (tipo/tamaño/coordenadas)</div>
+              </div>
+              <div style="display:flex;gap:8px">
+                <button type="button" class="small-btn ghost" id="btn-toggle-capture" title="Activar captura desde mapa">Capturar desde mapa</button>
+                <button type="button" class="small-btn ghost" id="btn-close-modal">Cerrar</button>
+              </div>
+            </div>
+
+            <!-- WO section -->
+            <div class="modal-section" id="section-wo">
+              <h3 id="label-wo-section">Orden de Trabajo (WO)</h3>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div>
+                  <label for="wo">WO *</label>
+                  <input id="wo" name="wo" type="text" placeholder="Work Order" required />
+                </div>
+                <div>
+                  <label for="date">Fecha *</label>
+                  <input id="date" name="date" type="date" required />
+                </div>
+                <div>
+                  <label for="jobsite">Job Site *</label>
+                  <input id="jobsite" name="jobsite" type="text" placeholder="Nombre del sitio" required />
+                </div>
+                <div>
+                  <label for="team">Team Leader</label>
+                  <input id="team" name="team" type="text" placeholder="Nombre del líder" />
+                </div>
+              </div>
+            </div>
+
+            <!-- Plugs section -->
+            <div class="modal-section" id="section-plugs">
+              <h3 id="label-plugs-section">Air Plugs (Agregar pines)</h3>
+
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;align-items:center">
+                <div>
+                  <label for="pin-type">Tipo (pin)</label>
+                  <select id="pin-type">
+                    <option value="regular">Regular</option>
+                    <option value="flow">Flow Through</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label for="pin-size">Tamaño (pin)</label>
+                  <select id="pin-size">
+                    <option value="12-24">12-24</option>
+                    <option value="15-32">15-32</option>
+                    <option value="18-36">18-36</option>
+                    <option value="24-48">24-48</option>
+                    <option value="24-60">24-60</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label for="coords">Coordenadas (lat,lng)</label>
+                  <input id="coords" name="coords" type="text" placeholder="Ej: 40.7128,-74.0060" />
+                </div>
+              </div>
+
+              <div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap">
+                <button type="button" class="small-btn" id="btn-add-pin">Añadir pin</button>
+                <button type="button" class="small-btn ghost" id="btn-my-location">📍 Usar mi ubicación</button>
+                <button type="button" class="small-btn ghost" id="btn-from-last-map">📌 Desde mapa (último click)</button>
+                <div style="flex:1"></div>
+                <div id="jobsiteInfo" style="align-self:center;font-size:13px;color:#365a8b"></div>
+              </div>
+
+              <div id="modal-pins-list" class="modal-pins-list" aria-live="polite"></div>
+            </div>
+
+            <!-- Comments section -->
+            <div class="modal-section" id="section-comments">
+              <h3 id="label-comments-section">Comentarios generales</h3>
+              <textarea id="comments" name="comments" rows="3" placeholder="Observaciones generales del WO..."></textarea>
+            </div>
+
+            <!-- Actions -->
+            <div style="display:flex;gap:8px;justify-content:space-between">
+              <button type="button" class="small-btn ghost" id="btn-cancel">Cancelar</button>
+              <div style="display:flex;gap:8px">
+                <button type="button" class="small-btn ghost" id="btn-delete-wo" title="Eliminar WO" style="display:none;background:#e74c3c;color:white;border:none">Eliminar WO</button>
+                <button type="submit" class="small-btn" id="btn-save">Guardar WO y plugs</button>
+              </div>
+            </div>
+
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Map capture floating control (visible only when capture active) -->
+    <div id="map-capture-control" aria-hidden="true">
+      <div style="font-weight:700;margin-right:8px">Captura activa</div>
+      <button id="btn-stop-capture">Detener captura</button>
+    </div>
+
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // ---------------------------
+    // App JS — revisado 2 veces
+    // ---------------------------
+
+    document.addEventListener('DOMContentLoaded', ()=>{
+
+      // -------- translations (basic) --------
+      const translations = {
+        es: {
+          title: "Set up Air Plug",
+          subtitle: "Flotech Enviromental",
+          installed: "Instalados",
+          removed: "Retirados",
+          total: "Total",
+          newWO: "Nuevo WO / Agregar plugs",
+          editWO: "Editar WO",
+          workOrder: "Orden de Trabajo (WO)",
+          jobsite: "Job Site",
+          teamLeader: "Team Leader",
+          date: "Fecha",
+          addPin: "Añadir pin",
+          myLocation: "📍 Usar mi ubicación",
+          fromMap: "📌 Desde mapa (último click)",
+          comments: "Comentarios generales",
+          cancel: "Cancelar",
+          deleteWO: "Eliminar WO",
+          save: "Guardar WO y plugs",
+          captureOn: "Captura activa",
+          captureOff: "Detener captura",
+          search_placeholder: "Buscar dirección o coordenadas...",
+          searchWO_placeholder: "Buscar por WO...",
+          panel_title: "Air Plugs",
+          confirm_delete_group: "¿Eliminar {wo}? Se borrarán {n} plugs.",
+          no_records_site: "Ningún registro aún en este sitio",
+          have_records_site: "Ya hay {n} registro(s) en este Job Site",
+          invalid_coords: "Coordenadas inválidas. Formato: lat,lng",
+          geoloc_not_supported: "Geolocalización no soportada en este dispositivo.",
+          geoloc_error: "No se pudo obtener la ubicación: {err}",
+          address_not_found: "Dirección no encontrada",
+          confirm_no_pins: "No agregaste ningún pin. ¿Guardar WO sin pines?"
+        },
+        en: {
+          title: "Set up Air Plug",
+          subtitle: "Flotech Environmental",
+          installed: "Installed",
+          removed: "Removed",
+          total: "Total",
+          newWO: "New WO / Add plugs",
+          editWO: "Edit WO",
+          workOrder: "Work Order (WO)",
+          jobsite: "Job Site",
+          teamLeader: "Team Leader",
+          date: "Date",
+          addPin: "Add pin",
+          myLocation: "📍 Use my location",
+          fromMap: "📌 From map (last click)",
+          comments: "General comments",
+          cancel: "Cancel",
+          deleteWO: "Delete WO",
+          save: "Save WO and plugs",
+          captureOn: "Capture active",
+          captureOff: "Stop capture",
+          search_placeholder: "Search address or coordinates...",
+          searchWO_placeholder: "Search by WO...",
+          panel_title: "Air Plugs",
+          confirm_delete_group: "Delete {wo}? {n} plugs will be removed.",
+          no_records_site: "No records yet in this site",
+          have_records_site: "There are {n} record(s) in this Job Site",
+          invalid_coords: "Invalid coordinates. Format: lat,lng",
+          geoloc_not_supported: "Geolocation not supported on this device.",
+          geoloc_error: "Could not get location: {err}",
+          address_not_found: "Address not found",
+          confirm_no_pins: "You didn't add any pins. Save WO without pins?"
+        }
+      };
+      let currentLang = document.getElementById('lang-switch').value || 'es';
+      function t(key, vars = {}) {
+        const str = (translations[currentLang] && translations[currentLang][key]) || key;
+        let out = str;
+        for (const k in vars) out = out.replace(`{${k}}`, vars[k]);
+        return out;
+      }
+
+      // ------------- state -------------
+      const LS_KEY = 'airplug_wo_v4';
+      const state = {
+        groups: [], // WO groups with plugs
+        map: null,
+        markers: {}, // keys: `${groupId}_${plugId}` and `tmp_${plugId}`
+        lastTapCoords: null,
+        modal: { mode: 'new', groupId: null, pins: [], captureFromMap: false }
+      };
+
+      // ------------- utils -------------
+      function genId(prefix='id'){ return prefix + '_' + Date.now().toString(36) + Math.random().toString(36).slice(2,6); }
+      function parseCoords(txt){
+        if(!txt) return null;
+        const parts = txt.split(/[,;\s]+/).map(s=>s.trim()).filter(Boolean);
+        if(parts.length < 2) return null;
+        const lat = parseFloat(parts[0]), lng = parseFloat(parts[1]);
+        if(Number.isFinite(lat) && Number.isFinite(lng)) return { lat, lng };
+        return null;
+      }
+      function escapeHtml(s){ if(!s) return ''; return String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":"&#39;"}[c])); }
+
+      // ------------- storage -------------
+      function loadState(){ try{ const raw = localStorage.getItem(LS_KEY); if(raw) state.groups = JSON.parse(raw); } catch(e){ console.error('loadState', e); } }
+      function saveState(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(state.groups)); } catch(e){ console.error('saveState', e); } refreshUI(); }
+
+      // ------------- map init -------------
+      function initMap(){
+        state.map = L.map('map',{zoomControl:true,attributionControl:true}).setView([20,0],2);
+        const baseMaps = {
+          "Streets": L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19}),
+          "Satellite": L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19, attribution:'Tiles &copy; Esri'})
+        };
+        baseMaps["Satellite"].addTo(state.map);
+        L.control.layers(baseMaps).addTo(state.map);
+
+        // try geolocate initial
+        if(navigator.geolocation){
+          navigator.geolocation.getCurrentPosition(pos=>{
+            state.map.setView([pos.coords.latitude, pos.coords.longitude],13);
+          }, ()=>{ fitAllMarkers(); });
+        }
+
+        // click handler
+        state.map.on('click', e=>{
+          state.lastTapCoords = e.latlng;
+          const modalOpen = document.getElementById('modal-backdrop').style.display === 'flex';
+          if(modalOpen && state.modal.captureFromMap){
+            // add pin from click; keep capture active so user can add more clicks
+            const type = document.getElementById('pin-type').value;
+            const size = document.getElementById('pin-size').value;
+            addModalPin({ lat: e.latlng.lat, lng: e.latlng.lng }, type, size, /*autoDisable*/ false);
+            return;
+          }
+          // otherwise open modal prefilled
+          openModal('new', null, { lat: e.latlng.lat, lng: e.latlng.lng });
+        });
+
+        // custom control (search + new WO)
+        const CustomControl = L.Control.extend({
+          options: { position: 'topright' },
+          onAdd: function(map){
+            const container = L.DomUtil.create('div', 'leaflet-control custom-controls');
+            container.innerHTML = `
+              <div class="cc-inner" aria-hidden="false">
+                <button id="cc-search-btn" class="cc-icon-btn" title="${t('search_placeholder')}">🔍</button>
+                <div id="cc-search-box" class="cc-search-box" role="search" style="display:none;">
+                  <input id="cc-search-input" placeholder="${t('search_placeholder')}" />
+                  <button id="cc-search-close" title="Cerrar">✖</button>
+                </div>
+                <button id="cc-btn-new" class="cc-big-btn primary">${t('newWO')}</button>
+                <button id="cc-btn-list" class="cc-big-btn">${t('panel_title')}</button>
+              </div>
+            `;
+            L.DomEvent.disableClickPropagation(container);
+            L.DomEvent.disableScrollPropagation(container);
+            return container;
+          }
+        });
+        state.map.addControl(new CustomControl());
+        setTimeout(()=> wireCustomControlEvents(), 140);
+        renderAllMarkers();
+      }
+
+      function wireCustomControlEvents(){
+        const sBtn = document.getElementById('cc-search-btn');
+        const sBox = document.getElementById('cc-search-box');
+        const sInput = document.getElementById('cc-search-input');
+        const sClose = document.getElementById('cc-search-close');
+        const nBtn = document.getElementById('cc-btn-new');
+        const lBtn = document.getElementById('cc-btn-list');
+
+        if(sBtn && sBox && sInput){
+          sBtn.onclick = ()=>{ const visible = sBox.style.display === 'flex'; sBox.style.display = visible ? 'none' : 'flex'; if(!visible){ sInput.focus(); sInput.select(); } };
+          if(sClose) sClose.onclick = ()=> { sBox.style.display='none'; };
+          sInput.addEventListener('keydown', async (e)=>{ if(e.key==='Enter'){ e.preventDefault(); const q=(sInput.value||'').trim(); if(!q) return; await searchAddress(q); sBox.style.display='none'; sInput.value=''; } });
+        }
+        if(nBtn) nBtn.onclick = ()=> openModal('new', null, null);
+        if(lBtn) lBtn.onclick = ()=> document.getElementById('panel-inner').scrollIntoView({behavior:'smooth'});
+      }
+
+      // ------------- markers -------------
+      function addMarkerToMap(group, plug){
+        if(!plug || !plug.coords) return;
+        const key = `${group.id}_${plug.id}`;
+        if(state.markers[key]) try{ state.map.removeLayer(state.markers[key]); }catch(e){}
+        const lat = plug.coords.lat, lng = plug.coords.lng;
+        const color = plug.state === 'removed' ? '#e74c3c' : '#2ecc71';
+        const marker = L.circleMarker([lat,lng], { radius:8, fillColor:color, fillOpacity:1, color:'#fff', weight:2 }).addTo(state.map);
+        const html = `
+          <div>
+            <strong>${escapeHtml(group.wo || '')}</strong><br/>
+            <b>Job Site:</b> ${escapeHtml(group.jobsite || '')}<br/>
+            <b>Tipo/Tamaño:</b> ${escapeHtml(plug.type || group.type || '')} / ${escapeHtml(plug.size || group.size || '')}<br/>
+            <b>Team:</b> ${escapeHtml(group.team || '')}<br/>
+            <b>Coords:</b> ${lat.toFixed(5)}, ${lng.toFixed(5)}<br/>
+            ${plug.installedAt ? '<b>Instalado:</b> '+new Date(plug.installedAt).toLocaleString()+'<br/>' : ''}
+            ${plug.removedAt ? '<b>Retirado:</b> '+new Date(plug.removedAt).toLocaleString()+'<br/>' : ''}
+          </div>`;
+        marker.bindPopup(html);
+        state.markers[key] = marker;
+      }
+
+      function renderAllMarkers(){
+        // clean non-tmp markers
+        Object.keys(state.markers).forEach(k => {
+          if(!k.startsWith('tmp_')) {
+            try{ state.map.removeLayer(state.markers[k]); }catch(e){}
+            delete state.markers[k];
+          } else {
+            // keep tmp_ for modal preview until cleared explicitly
+            try{
+              // keep it,
+              null;
+            }catch(e){}
+          }
+        });
+        // add markers for groups
+        state.groups.forEach(g => (g.plugs||[]).forEach(p => addMarkerToMap(g,p)));
+        refreshCounters();
+      }
+
+      // ------------- counters & cards -------------
+      function refreshCounters(){
+        const installed = state.groups.reduce((acc,g) => acc + ((g.plugs||[]).filter(p=>p.state==='installed').length), 0);
+        const installedEl = document.getElementById('count-installed');
+        const totalEl = document.getElementById('count-total');
+        if(installedEl) installedEl.textContent = `${t('installed')}: ${installed}`;
+        if(totalEl) totalEl.textContent = `${t('total')}: ${installed}`;
+      }
+
+      function renderCards(){
+        const container = document.getElementById('cards'); if(!container) return;
+        container.innerHTML = '';
+        const q = (document.getElementById('searchWO').value || '').trim().toLowerCase();
+        const stateFilter = document.getElementById('filterState').value;
+
+        const list = state.groups.filter(g => {
+          if(!q) return true;
+          return (g.wo||'').toLowerCase().includes(q) || (g.jobsite||'').toLowerCase().includes(q);
+        }).sort((a,b) => (a.wo||'').localeCompare(b.wo||''));
+
+        list.forEach(group => {
+          const card = document.createElement('div'); card.className='card';
+          const plugsCount = (group.plugs||[]).length;
+          const installedCount = (group.plugs||[]).filter(p=>p.state==='installed').length;
+          const removedCount = plugsCount - installedCount;
+
+          const header = document.createElement('div'); header.className='card-row';
+          header.innerHTML = `
+            <div class="meta">
+              <div><strong>${escapeHtml(group.wo||'')}</strong> <span class="muted">${escapeHtml(group.jobsite||'')}</span></div>
+              <div class="muted">Fecha: ${group.date || '-'} · Pins: ${plugsCount} · Instalados: ${installedCount} · Retirados: ${removedCount}</div>
+            </div>
+          `;
+          const actions = document.createElement('div'); actions.className='card-actions';
+          const editBtn = document.createElement('button'); editBtn.className='small-btn ghost'; editBtn.textContent='Editar WO';
+          editBtn.onclick = ()=> openModal('edit', group.id, null);
+          const deleteBtn = document.createElement('button'); deleteBtn.className='small-btn'; deleteBtn.textContent='Eliminar WO';
+          deleteBtn.onclick = ()=> {
+            if(confirm(t('confirm_delete_group', { wo: group.wo, n: (group.plugs||[]).length }))) {
+              state.groups = state.groups.filter(g=>g.id !== group.id);
+              saveState();
+            }
+          };
+          actions.appendChild(editBtn); actions.appendChild(deleteBtn);
+          header.appendChild(actions);
+          card.appendChild(header);
+
+          // plugs list
+          const plugsContainer = document.createElement('div'); plugsContainer.style.marginTop='8px';
+          (group.plugs||[]).forEach(plug => {
+            if(stateFilter === 'installed' && plug.state!=='installed') return;
+            if(stateFilter === 'removed' && plug.state!=='removed') return;
+            const pEl = document.createElement('div'); pEl.className='modal-pin-item';
+            const left = document.createElement('div'); left.innerHTML = `<div class="pin-mini-meta"><strong>${plug.coords.lat.toFixed(5)}, ${plug.coords.lng.toFixed(5)}</strong><div class="muted">Tipo: ${escapeHtml(plug.type)}, Tamaño: ${escapeHtml(plug.size)}</div></div>`;
+            const right = document.createElement('div'); right.style.display='flex'; right.style.gap='6px';
+            const viewBtn = document.createElement('button'); viewBtn.className='small-btn ghost'; viewBtn.textContent='Ver';
+            viewBtn.onclick = ()=> { if(state.map){ state.map.setView([plug.coords.lat, plug.coords.lng],16); const key = `${group.id}_${plug.id}`; const m = state.markers[key]; if(m) m.openPopup(); } };
+            right.appendChild(viewBtn);
+
+            if(plug.state === 'installed'){
+              const remBtn = document.createElement('button'); remBtn.className='small-btn'; remBtn.textContent='Marcar retirado';
+              remBtn.onclick = ()=> { if(!confirm('Marcar este plug como retirado?')) return; plug.state='removed'; plug.removedAt = Date.now(); saveState(); renderAllMarkers(); renderCards(); };
+              right.appendChild(remBtn);
+            } else {
+              const restoreBtn = document.createElement('button'); restoreBtn.className='small-btn ghost'; restoreBtn.textContent='Restaurar';
+              restoreBtn.onclick = ()=> { plug.state='installed'; plug.removedAt=null; saveState(); renderAllMarkers(); renderCards(); };
+              right.appendChild(restoreBtn);
+            }
+
+            pEl.appendChild(left); pEl.appendChild(right); plugsContainer.appendChild(pEl);
+          });
+
+          card.appendChild(plugsContainer);
+          container.appendChild(card);
+        });
+
+        refreshCounters();
+      }
+
+      // ------------- modal temporary pins -------------
+      function clearModalTempMarkers(){
+        Object.keys(state.markers).forEach(k=>{
+          if(k.startsWith('tmp_')){
+            try{ state.map.removeLayer(state.markers[k]); }catch(e){}
+            delete state.markers[k];
+          }
+        });
+      }
+
+      /**
+       * addModalPin(coords, type, size, autoDisableCapture)
+       * - coords: {lat,lng}
+       * - autoDisableCapture: boolean -> if true, switch capture mode off after adding (useful for manual adds)
+       */
+      function addModalPin(coords, type, size, autoDisableCapture = true){
+        if(!coords || typeof coords.lat !== 'number' || typeof coords.lng !== 'number') return false;
+        const plug = {
+          id: genId('plug'),
+          coords: { lat: parseFloat(coords.lat), lng: parseFloat(coords.lng) },
+          type: type || (document.getElementById('pin-type') ? document.getElementById('pin-type').value : 'regular'),
+          size: size || (document.getElementById('pin-size') ? document.getElementById('pin-size').value : '12-24'),
+          state: 'installed',
+          installedAt: Date.now(),
+          removedAt: null
+        };
+        state.modal.pins.push(plug);
+        renderModalPinsList();
+
+        // add temporary marker for preview (key tmp_{plug.id})
+        const tmpKey = `tmp_${plug.id}`;
+        if(state.markers[tmpKey]) try{ state.map.removeLayer(state.markers[tmpKey]); }catch(e){}
+        const m = L.circleMarker([plug.coords.lat, plug.coords.lng], { radius:7, fillColor:'#2ecc71', fillOpacity:0.95, color:'#fff', weight:2 }).addTo(state.map);
+        m.bindPopup(`<strong>Pin (temporal)</strong><br/>${plug.coords.lat.toFixed(5)}, ${plug.coords.lng.toFixed(5)}<br/>Tipo: ${escapeHtml(plug.type)}, Tamaño: ${escapeHtml(plug.size)}`);
+        state.markers[tmpKey] = m;
+
+        if(autoDisableCapture) {
+          // manual add -> we disable capture so user can return to modal
+          setCaptureMode(false);
+        }
+        return true;
+      }
+
+      function renderModalPinsList(){
+        const list = document.getElementById('modal-pins-list'); if(!list) return;
+        list.innerHTML = '';
+        state.modal.pins.forEach(p => {
+          const item = document.createElement('div'); item.className='modal-pin-item';
+          const left = document.createElement('div'); left.innerHTML = `<div class="pin-mini-meta"><strong>${p.coords.lat.toFixed(5)}, ${p.coords.lng.toFixed(5)}</strong><div class="muted">Tipo: ${escapeHtml(p.type)}, Tamaño: ${escapeHtml(p.size)}</div></div>`;
+          const right = document.createElement('div'); right.style.display='flex'; right.style.gap='6px';
+          const viewBtn = document.createElement('button'); viewBtn.className='small-btn ghost'; viewBtn.textContent='Ver';
+          viewBtn.onclick = ()=> { if(state.map){ state.map.setView([p.coords.lat, p.coords.lng],16); const k = `tmp_${p.id}`; const m = state.markers[k]; if(m) m.openPopup(); } };
+          const removeBtn = document.createElement('button'); removeBtn.className='small-btn ghost'; removeBtn.textContent='Quitar';
+          removeBtn.onclick = ()=> { const k = `tmp_${p.id}`; if(state.markers[k]){ try{ state.map.removeLayer(state.markers[k]); }catch(e){} delete state.markers[k]; } state.modal.pins = state.modal.pins.filter(x=>x.id !== p.id); renderModalPinsList(); };
+          right.appendChild(viewBtn); right.appendChild(removeBtn);
+          item.appendChild(left); item.appendChild(right); list.appendChild(item);
+        });
+      }
+
+      // ------------- capture control (floating) -------------
+      function showMapCaptureControl(){
+        const el = document.getElementById('map-capture-control');
+        if(!el) return;
+        el.style.display = 'flex';
+        el.setAttribute('aria-hidden', 'false');
+        // update label according to language
+        el.querySelector('div').textContent = t('captureOn');
+        const btn = document.getElementById('btn-stop-capture');
+        if(btn) btn.textContent = t('captureOff');
+      }
+      function hideMapCaptureControl(){
+        const el = document.getElementById('map-capture-control');
+        if(!el) return;
+        el.style.display = 'none';
+        el.setAttribute('aria-hidden', 'true');
+      }
+
+      document.getElementById('btn-stop-capture').onclick = ()=> setCaptureMode(false);
+
+      // ------------- modal open/close -------------
+      function openModal(mode='new', groupId=null, prefillCoords=null){
+        state.modal.mode = mode;
+        state.modal.groupId = groupId;
+        state.modal.pins = [];
+        clearModalTempMarkers();
+        const backdrop = document.getElementById('modal-backdrop');
+        const form = document.getElementById('form');
+        form.reset();
+
+        if(mode === 'edit'){
+          const g = state.groups.find(x => x.id === groupId);
+          if(!g){ alert('WO no encontrado'); return; }
+          document.getElementById('modal-title').textContent = `${t('editWO')}: ${g.wo || ''}`;
+          document.getElementById('wo').value = g.wo || '';
+          document.getElementById('jobsite').value = g.jobsite || '';
+          document.getElementById('team').value = g.team || '';
+          document.getElementById('date').value = g.date || '';
+          document.getElementById('comments').value = g.comments || '';
+          document.getElementById('pin-type').value = g.type || 'regular';
+          document.getElementById('pin-size').value = g.size || '12-24';
+          document.getElementById('jobsiteInfo').textContent = t('have_records_site', { n: (g.plugs||[]).length });
+          // show delete WO button and wire it
+          const delBtn = document.getElementById('btn-delete-wo');
+          delBtn.style.display = 'inline-block';
+          delBtn.onclick = ()=> {
+            if(confirm(t('confirm_delete_group', { wo: g.wo, n: (g.plugs||[]).length }))) {
+              state.groups = state.groups.filter(x=>x.id !== g.id);
+              saveState();
+              closeModal();
+            }
+          };
+        } else {
+          document.getElementById('modal-title').textContent = t('newWO');
+          document.getElementById('wo').value = '';
+          document.getElementById('jobsite').value = '';
+          document.getElementById('team').value = '';
+          document.getElementById('comments').value = '';
+          // default to today
+          document.getElementById('date').value = new Date().toISOString().slice(0,10);
+          document.getElementById('pin-type').value = 'regular';
+          document.getElementById('pin-size').value = '12-24';
+          document.getElementById('jobsiteInfo').textContent = '';
+          document.getElementById('btn-delete-wo').style.display = 'none';
+        }
+
+        // prefill coords if provided
+        if(prefillCoords && typeof prefillCoords.lat === 'number') document.getElementById('coords').value = `${prefillCoords.lat.toFixed(5)},${prefillCoords.lng.toFixed(5)}`;
+        else document.getElementById('coords').value = '';
+
+        backdrop.style.display = 'flex'; backdrop.setAttribute('aria-hidden','false');
+        setCaptureMode(false);
+        renderModalPinsList();
+        setTimeout(()=> document.getElementById('wo').focus(), 80);
+      }
+
+      function closeModal(){
+        state.modal.pins = [];
+        clearModalTempMarkers();
+        setCaptureMode(false);
+        const backdrop = document.getElementById('modal-backdrop');
+        backdrop.style.display = 'none'; backdrop.setAttribute('aria-hidden','true');
+      }
+
+      // ------------- capture mode toggle -------------
+      function setCaptureMode(on){
+        state.modal.captureFromMap = !!on;
+        const btn = document.getElementById('btn-toggle-capture');
+        const backdrop = document.getElementById('modal-backdrop');
+        if(on){
+          btn.classList.add('toggle-active');
+          // allow clicks to pass to map by disabling pointer events on backdrop
+          backdrop.style.pointerEvents = 'none';
+          backdrop.style.background = 'rgba(3,6,23,0.06)';
+          showMapCaptureControl();
+          // Esc key should stop capture
+          document.addEventListener('keydown', escListener);
+        } else {
+          btn.classList.remove('toggle-active');
+          backdrop.style.pointerEvents = 'auto';
+          backdrop.style.background = 'rgba(3,6,23,0.4)';
+          hideMapCaptureControl();
+          document.removeEventListener('keydown', escListener);
+        }
+      }
+      function escListener(e){ if(e.key === 'Escape') setCaptureMode(false); }
+
+      // ------------- modal button handlers -------------
+      document.getElementById('btn-toggle-capture').onclick = ()=> setCaptureMode(!state.modal.captureFromMap);
+      document.getElementById('btn-close-modal').onclick = ()=> closeModal();
+      document.getElementById('btn-cancel').onclick = ()=> closeModal();
+
+      // add pin from manual coords input (auto-disable capture so user returns to modal)
+      document.getElementById('btn-add-pin').onclick = ()=>{
+        const coordsText = (document.getElementById('coords').value || '').trim();
+        const coords = parseCoords(coordsText);
+        if(!coords){ alert(t('invalid_coords')); return; }
+        const type = document.getElementById('pin-type').value;
+        const size = document.getElementById('pin-size').value;
+        addModalPin(coords, type, size, /*autoDisable*/ true);
+        document.getElementById('coords').value = '';
+      };
+
+      // add pin from "use my location"
+      document.getElementById('btn-my-location').onclick = ()=>{
+        const btn = document.getElementById('btn-my-location'); const orig = btn.textContent;
+        btn.disabled = true; btn.textContent = t('myLocation') + '...';
+        if(!navigator.geolocation){ alert(t('geoloc_not_supported')); btn.disabled = false; btn.textContent = orig; return; }
+        navigator.geolocation.getCurrentPosition(pos=>{
+          const lat = parseFloat(pos.coords.latitude), lng = parseFloat(pos.coords.longitude);
+          const type = document.getElementById('pin-type').value;
+          const size = document.getElementById('pin-size').value;
+          addModalPin({lat,lng}, type, size, /*autoDisable*/ true);
+          document.getElementById('coords').value = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+          btn.disabled = false; btn.textContent = orig;
+        }, err=>{
+          alert(t('geoloc_error', { err: err.message || err.code }));
+          btn.disabled = false; btn.textContent = orig;
+        }, { enableHighAccuracy:true, timeout:12000 });
+      };
+
+      // add pin from last map click (auto-disable)
+      document.getElementById('btn-from-last-map').onclick = ()=>{
+        if(!state.lastTapCoords){ alert(t('invalid_coords')); return; }
+        const lat = state.lastTapCoords.lat, lng = state.lastTapCoords.lng;
+        const type = document.getElementById('pin-type').value;
+        const size = document.getElementById('pin-size').value;
+        addModalPin({lat,lng}, type, size, /*autoDisable*/ true);
+        document.getElementById('coords').value = `${lat.toFixed(5)},${lng.toFixed(5)}`;
+      };
+
+      // stop capture floating button handled above
+
+      // ------------- form save -------------
+      document.getElementById('form').onsubmit = function(e){
+        e.preventDefault();
+        const woVal = (document.getElementById('wo').value||'').trim();
+        const jobsiteVal = (document.getElementById('jobsite').value||'').trim();
+        const dateVal = (document.getElementById('date').value||'').trim();
+        if(!woVal || !jobsiteVal || !dateVal){ alert('WO, Job Site y Fecha son obligatorios.'); return; }
+        const teamVal = (document.getElementById('team').value||'').trim();
+        const commentsVal = (document.getElementById('comments').value||'').trim();
+        const defaultType = document.getElementById('pin-type').value;
+        const defaultSize = document.getElementById('pin-size').value;
+
+        if((state.modal.pins||[]).length === 0){
+          if(!confirm(t('confirm_no_pins'))) return;
+        }
+
+        if(state.modal.mode === 'edit'){
+          const g = state.groups.find(x => x.id === state.modal.groupId);
+          if(!g){ alert('Grupo no encontrado'); return; }
+          g.wo = woVal; g.jobsite = jobsiteVal; g.team = teamVal; g.date = dateVal; g.comments = commentsVal;
+          g.type = defaultType; g.size = defaultSize;
+          g.plugs = g.plugs || [];
+          state.modal.pins.forEach(p => g.plugs.push({...p}));
+        } else {
+          const group = {
+            id: genId('wo'),
+            wo: woVal,
+            jobsite: jobsiteVal,
+            team: teamVal,
+            date: dateVal,
+            comments: commentsVal,
+            type: defaultType,
+            size: defaultSize,
+            plugs: (state.modal.pins||[]).map(p => ({ ...p }))
+          };
+          state.groups.push(group);
+        }
+
+        // clear temp markers and modal pins
+        clearModalTempMarkers();
+        state.modal.pins = [];
+        saveState();
+        closeModal();
+        renderAllMarkers();
+        renderCards();
+      };
+
+      // ------------- search (nominatim) -------------
+      async function searchAddress(query){
+        const coords = parseCoords(query);
+        if(coords){ state.map.setView([coords.lat, coords.lng], 15); return true; }
+        try {
+          const url = `https://nominatim.openstreetmap.org/search?format=json&limit=5&q=${encodeURIComponent(query)}`;
+          const res = await fetch(url);
+          if(!res.ok) throw new Error('HTTP '+res.status);
+          const data = await res.json();
+          if(data && data.length>0){
+            const lat = parseFloat(data[0].lat), lon = parseFloat(data[0].lon);
+            state.map.setView([lat, lon], 15);
+            return true;
+          } else { alert(t('address_not_found')); return false; }
+        } catch(err){
+          console.error('search error', err);
+          alert(t('address_not_found')); return false;
+        }
+      }
+
+      // ------------- helpers -------------
+      function fitAllMarkers(){
+        const coords = state.groups.flatMap(g => (g.plugs||[]).filter(p=>p.coords).map(p=>[p.coords.lat,p.coords.lng]));
+        if(coords.length===0) return;
+        const bounds = L.latLngBounds(coords);
+        state.map.fitBounds(bounds, {padding:[40,40]});
+      }
+
+      function refreshUI(){ renderAllMarkers(); renderCards(); }
+
+      // ------------- language UI updater -------------
+      function applyLanguage(lang){
+        currentLang = lang;
+        // static text
+        document.querySelector('.title').textContent = t('title');
+        document.querySelector('.subtitle').textContent = t('subtitle');
+        document.getElementById('panel-title').textContent = t('panel_title');
+        document.getElementById('searchWO').placeholder = t('searchWO_placeholder');
+        const sInp = document.getElementById('cc-search-input'); if(sInp) sInp.placeholder = t('search_placeholder');
+        // buttons
+        document.getElementById('btn-add-pin').textContent = t('addPin');
+        document.getElementById('btn-my-location').textContent = t('myLocation');
+        document.getElementById('btn-from-last-map').textContent = t('fromMap');
+        document.getElementById('btn-cancel').textContent = t('cancel');
+        document.getElementById('btn-save').textContent = t('save');
+        document.getElementById('btn-toggle-capture').textContent = t('captureOn');
+        // capture floating
+        const capEl = document.getElementById('map-capture-control');
+        if(capEl && capEl.style.display === 'flex') showMapCaptureControl();
+        // translate counts
+        refreshCounters();
+        // if custom controls exist on map, update their text
+        const ccNew = document.getElementById('cc-btn-new'); if(ccNew) ccNew.textContent = t('newWO');
+        const ccList = document.getElementById('cc-btn-list'); if(ccList) ccList.textContent = t('panel_title');
+      }
+
+      // language switch handler
+      document.getElementById('lang-switch').addEventListener('change', (e)=> {
+        applyLanguage(e.target.value);
+      });
+
+      // ------------- init -------------
+      loadState();
+      initMap();
+      applyLanguage(currentLang);
+      renderCards();
+      renderAllMarkers();
+
+      // panel buttons
+      document.getElementById('btn-clear').onclick = ()=> { if(confirm(t('confirm_delete_group', { wo: 'TODOS', n: 0 }))) { state.groups = []; saveState(); } };
+      document.getElementById('btn-center').onclick = ()=> fitAllMarkers();
+      document.getElementById('searchWO').oninput = ()=> renderCards();
+      document.getElementById('filterState').onchange = ()=> renderCards();
+
+      // close modal on outside click (only if capture off)
+      document.getElementById('modal-backdrop').addEventListener('click', (e)=>{
+        if(e.target && e.target.id === 'modal-backdrop' && !state.modal.captureFromMap) closeModal();
+      });
+
+      // ensure save before unload
+      window.addEventListener('beforeunload', ()=> saveState());
+
+      // jobsite info live update
+      document.getElementById('jobsite').addEventListener('input', ()=>{
+        const job = (document.getElementById('jobsite').value || '').trim().toLowerCase();
+        const count = state.groups.filter(g => (g.jobsite||'').toLowerCase() === job).length;
+        document.getElementById('jobsiteInfo').textContent = count > 0 ? t('have_records_site', { n: count }) : t('no_records_site');
+      });
+
+    }); // DOMContentLoaded end
+  </script>
+</body>
+</html>
